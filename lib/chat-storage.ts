@@ -197,6 +197,7 @@ export type ChatMessage = {
         adminActorName?: string;  // 群管理操作执行人显示名
         adminTargetName?: string; // 群管理操作目标显示名
         adminMuteMinutes?: number;// 禁言时长（分钟）
+        blacklistEvent?: "block" | "unblock"; // 仿真拉黑系统事件类型（私聊：用户拉黑/解除拉黑角色）
         musicTitle?: string;      // 音乐标题
         musicArtist?: string;     // 音乐歌手
         xiaohongshuAuthor?: string;       // 小红书分享作者
