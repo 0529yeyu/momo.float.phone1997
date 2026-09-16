@@ -757,6 +757,8 @@ export function ChatSettingsPanel({
             content: blocked
                 ? `${userLabel}把${charLabel}拉黑了，${charLabel}发出去的消息都会被${userLabel}拒收`
                 : `${userLabel}解除了对${charLabel}的拉黑，${charLabel}的消息恢复正常送达`,
+            // 标记事件类型：提示词组装时豁免「空生成续写压制」，保证角色必须对此事件作出反应
+            mediaData: { blacklistEvent: blocked ? "block" : "unblock" },
         });
         // 让角色「知道」并做出反应：走聊天室完整生成管线（聊天页未挂载时由桌面壳兜底）
         window.dispatchEvent(new CustomEvent(CHAT_REQUEST_REPLY_EVENT, { detail: { sessionId: session.id } }));
