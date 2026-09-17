@@ -5298,6 +5298,9 @@
 
 /* Card */
 .mem-tl-card {
+  position: relative; /* 修复：卡片内「REPORT」水印绝对定位缺少定位上下文时，
+                          会相对最近的定位祖先 .mem-tl（整份列表）而非各自卡片本身，
+                          导致所有卡片的水印叠在同一位置、遮住顶部的来源标签筛选条 */
   width: 100%;
   min-width: 0;
   cursor: pointer;
