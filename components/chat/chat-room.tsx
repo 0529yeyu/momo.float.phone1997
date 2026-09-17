@@ -1112,6 +1112,9 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
     const [regexRevision, setRegexRevision] = useState(0);
     // Whether there are unsent user messages waiting for AI generation
     const [pendingGenerate, setPendingGenerate] = useState(false);
+    // 生成期间又来了一次回复请求（如拉黑/解除拉黑事件）且被判定为忙碌丢弃：
+    // 记一笔，等当前这轮生成收尾后强制补跑一轮，不能靠 pendingGenerate（它只认「最后一条是用户消息」）
+    const pendingReplyRequestRef = useRef(false);
     const [chatToast, setChatToast] = useState<string | null>(null);
     const chatToastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
     // 自动生图失败：弹一次弹窗提示，关掉即消失（同一轮里多张失败只提示第一条）
@@ -3899,11 +3902,19 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
                 if (!mountedRef.current) {
                     window.dispatchEvent(new CustomEvent(CHAT_BG_COMPLETE, { detail: { sessionId: session.id } }));
                 }
-                // If user sent more messages while AI was generating, show the generate button again
-                const latestMsgs = loadChatMessages(session.id);
-                const last = latestMsgs[latestMsgs.length - 1];
-                if (last && last.role === "user") {
-                    setPendingGenerate(true);
+                // 生成期间被丢弃的回复请求（拉黑/解除拉黑等系统事件）优先补跑一轮，
+                // 保证角色不会对生成期间发生的事件浑然不知；这类请求不满足下面
+                // 「最后一条是用户消息」的 pendingGenerate 兜底条件，必须单独处理
+                if (pendingReplyRequestRef.current) {
+                    pendingReplyRequestRef.current = false;
+                    void triggerAIResponse();
+                } else {
+                    // If user sent more messages while AI was generating, show the generate button again
+                    const latestMsgs = loadChatMessages(session.id);
+                    const last = latestMsgs[latestMsgs.length - 1];
+                    if (last && last.role === "user") {
+                        setPendingGenerate(true);
+                    }
                 }
             } else if (!activeGenerationRuns.has(session.id)) {
                 // 本轮被外部取消且没有新一轮接手：仍需复位，否则「生成中」标记永久卡死，
@@ -3944,9 +3955,14 @@ export function ChatRoom({ session, onBack, onDeleted }: ChatRoomProps) {
 
             if (detail) detail.handled = true;
             syncMessagesFromStorage();
-            // 真在生成中：如实告知调用方（避免记成「已生成回应」），本轮结束后 pendingGenerate 兜底
+            // 真在生成中：如实告知调用方（避免记成「已生成回应」）。
+            // 注意：pendingGenerate 兜底只在「最后一条是用户消息」时才会补触发（见 finally 块），
+            // 拉黑/解除拉黑等系统事件触发的回复请求最后一条是 role:"system"，走不到那条兜底——
+            // 若这里直接丢弃，角色就会对生成期间发生的拉黑事件浑然不知（旧回复照常送达，
+            // 且不会再补一轮「知情反应」）。用 pendingReplyRequestRef 记一笔，本轮结束后强制补跑。
             if (isGeneratingRef.current && activeGenerationRuns.has(session.id)) {
                 if (detail) detail.busy = true;
+                pendingReplyRequestRef.current = true;
                 return;
             }
             void triggerAIResponse();
